@@ -1,40 +1,55 @@
-function run_pipeline(iexp, db, ops0, clustrules)
+function run_pipeline(db, ops0, clustrules)
 
-if ops0.CopyDataLocally
-    db0 = copy_from_zserver(db(iexp), ops0);
-    ops = build_ops2(db0, ops0);
-else
-    ops = build_ops(db(iexp), ops0);
-end
+ops = build_ops3(db, ops0);
 
 if ops.useGPU
     gpuDevice(1);   % reset GPU at each dataset
 end
 %
-ops1         = reg2Pnew(ops);  % do registration
 
+clustModel     = getOr(ops, {'clustModel'}, 'standard');
+neuropilSub    = getOr(ops, {'neuropilSub'}, 'surround');
+
+ops1         = reg2P(ops);  % do registration
+%%
 for i = 1:length(ops.planesToProcess)
     iplane  = ops.planesToProcess(i);
     ops     = ops1{i};
+
+    ops.niterclustering = 40;
     ops.iplane  = iplane;
-    
-    if numel(ops.yrange)>300 && numel(ops.xrange)>300
+
+    if numel(ops.yrange)>ops.Ly/2 && numel(ops.xrange)>ops.Lx/2
         if ops.getSVDcomps
             ops    = get_svdcomps(ops);
         end
-        
-        if ops.getROIs            
+
+        if ops.getROIs
             [ops, U, Sv]        = get_svdForROI(ops);
             %
-            [ops, stat0, res0]  = fast_clustering(ops, reshape(U, [], size(U,3)), Sv);
-            %
-            apply_ROIrules(ops, stat0, res0, clustrules);
-            %
-            %get_signals_and_neuropil(ops, iplane);
-			get_signals_and_neuropil(ops, iplane);
+            U =  reshape(U, [], size(U,3));
+            switch clustModel
+                case 'standard'
+                    [ops, stat, res]  = fast_clustering(ops,U, Sv);
+                case 'neuropil'
+                    [ops, stat, res]  = fast_clustering_with_neuropil(ops,U, Sv);
+            end
+            
+            apply_ROIrules(ops, stat, res, clustrules);
+
+            switch neuropilSub
+                case 'surround'
+                    get_signals_and_neuropil(ops, iplane);
+                case 'none'
+                    get_signals(ops, iplane);
+                case 'model'
+                     get_signals_NEUmodel(ops, iplane);
+
+            end
+
         end
     end
-    
+
     if ops.DeleteBin
         delete(ops.RegFile);        % delete temporary bin file
     end

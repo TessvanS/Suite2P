@@ -22,7 +22,8 @@ fsrootRED = [];
 
 for j = 1:length(subDirsRed)
     fsrootRED{j} = dir(fullfile(ops.RootDir, subDirsRed{j}, '*.tif'));
-    for k = 1:length(ops.fsroot{j})
+    jn=find(ops.expts==str2num(subDirsRed{j}));
+    for k = 1:length(ops.fsroot{jn})
         fsrootRED{j}(k).name = fullfile(ops.RootDir, subDirsRed{j}, fsrootRED{j}(k).name);         
     end
 end
@@ -83,38 +84,34 @@ for j = 1:ops.nplanes
 end
 %
 ntf0 = 0;
-lastChan=0;
+numPlanes = ops.nplanes;
+iplane0 = 1:1:ops.nplanes;
 for k = 1:length(fsRED)
-    
-
     if nimgall(indx(k))>=median(nimgall(indx))        
-        
-
-        ichanset = [2*ops.nchannels*ops.nplanes - lastChan  + [ops.nchannels (ntifs*ops.nchannels*ops.nplanes)] ...
-            ops.nchannels];
-        numbFrames=nFrames(fsRED{k});
-        lastChan=lastChan+mod(numbFrames,ops.nchannels*ops.nplanes);
-
-        lastChan=mod(lastChan,ops.nchannels*ops.nplanes);
-
+        iplane0 = mod(iplane0-1, numPlanes) + 1;
          
+        ichanset = [ops.nchannels*ops.nplanes + [ops.nchannels (ntifs*ops.nchannels*ops.nplanes)] ...
+            ops.nchannels]; 
         data = loadFrames(fsRED{k}, ichanset(1),ichanset(2), ichanset(3));        
         if ~exist('mimgR')
             [Ly, Lx, ~] = size(data);
             mimgR = zeros(Ly, Lx, ops.nplanes);
         end
-        data = reshape(data, Ly, Lx, ops.nplanes, ntifs);  
+        data = reshape(data, Ly, Lx, ops.nplanes, ntifs);         
 
         for j = 1:size(data,3)
             dsall = DS{j}(nimgFirst(indx(k), j)+1 + [1:size(data,4)], :);
             data(:, :, j,:)        = ...
                     register_movie(data(:, :, j, :), ops, dsall);
         end
-        mimgR = mimgR + mean(data, 4);            
+        mimgR = mimgR + mean(data(:,:,iplane0,:), 4);            
         ntf0 = ntf0 + 1;
+        
+        nFr = img.nFrames(fsRED{k});
+        iplane0 = iplane0 - nFr/ops.nchannels;
+        
+%         keyboard;
     end
 end
 
 mimgR = mimgR/ntf0;
-
-
